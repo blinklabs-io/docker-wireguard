@@ -1,0 +1,7 @@
+.git
+.github
+.gitignore
+.golangci.yml
+*.md
+*.test
+wg-peer-api

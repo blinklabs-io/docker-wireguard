@@ -1,0 +1,72 @@
+#!/bin/bash
+set -euo pipefail
+
+# Environment variable defaults
+USER_STARTUP_SCRIPT=${USER_STARTUP_SCRIPT:-/usr/local/bin/entrypoint-user.sh}
+ENABLE_NAT=${ENABLE_NAT:-1}
+WG_SUBNET=${WG_SUBNET:-10.8.0.1/24}
+NAT_DEVICE=${NAT_DEVICE:-eth0}
+WG_PORT=${WG_PORT:-51820}
+API_LISTEN=${API_LISTEN:-:8080}
+JWT_PUBLIC_KEY_FILE=${JWT_PUBLIC_KEY_FILE:-/etc/wireguard/jwt-verify.pub}
+DEBUG=${DEBUG:-0}
+
+# Create TUN device
+mkdir -p /dev/net
+if [[ ! -c /dev/net/tun ]]; then
+    mknod /dev/net/tun c 10 200
+fi
+
+# Enable IP forwarding
+echo 1 > /proc/sys/net/ipv4/ip_forward
+
+# Generate server keypair if not provided
+if [[ -z "${WG_PRIVATE_KEY:-}" ]]; then
+    WG_PRIVATE_KEY=$(wg genkey)
+    echo "WARNING: Generated ephemeral server key. Provide WG_PRIVATE_KEY for persistence." >&2
+fi
+export WG_PUBLIC_KEY
+WG_PUBLIC_KEY=$(echo "$WG_PRIVATE_KEY" | wg pubkey)
+
+# Create WireGuard interface
+ip link add dev wg0 type wireguard
+ip addr add "${WG_SUBNET}" dev wg0
+
+# Configure WireGuard with private key
+wg set wg0 \
+    private-key <(echo "$WG_PRIVATE_KEY") \
+    listen-port "${WG_PORT}"
+
+ip link set wg0 up
+
+# Firewall rules
+if [[ "${ENABLE_NAT}" == "1" ]]; then
+    # Extract network from WG_SUBNET for NAT source (e.g., 10.8.0.1/24 -> 10.8.0.0/24)
+    NAT_SOURCE=$(echo "${WG_SUBNET}" | sed 's/\.[0-9]*\//.0\//')
+    iptables -t nat -A POSTROUTING -s "${NAT_SOURCE}" -o "${NAT_DEVICE}" -j MASQUERADE
+    # Kill switch
+    iptables -P FORWARD DROP
+    iptables -A FORWARD -i wg0 -o "${NAT_DEVICE}" -j ACCEPT
+    iptables -A FORWARD -i "${NAT_DEVICE}" -o wg0 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+fi
+
+# Execute user startup script if exists
+if [[ -e "${USER_STARTUP_SCRIPT}" ]]; then
+    if [[ ! -x "${USER_STARTUP_SCRIPT}" ]]; then
+        chmod a+x "${USER_STARTUP_SCRIPT}"
+    fi
+    if ! "${USER_STARTUP_SCRIPT}"; then
+        echo "WARN: User startup script exited with error" >&2
+    fi
+fi
+
+# Redirect output to /dev/null unless in debug mode
+if [[ "${DEBUG}" == "0" ]]; then
+    exec &>/dev/null
+fi
+
+# Start peer management API
+exec /bin/wg-peer-api \
+    --listen "${API_LISTEN}" \
+    --jwt-public-key "${JWT_PUBLIC_KEY_FILE}" \
+    --interface wg0

@@ -25,6 +25,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/blinklabs-io/docker-wireguard/internal/jwt"
 	"github.com/blinklabs-io/docker-wireguard/internal/metrics"
@@ -153,8 +154,9 @@ func (rw *responseWriter) WriteHeader(code int) {
 func instrumentHandler(endpoint string, handler http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
+		sanitizedPath := sanitizeForLog(r.URL.Path)
 		if debug {
-			log.Printf("-> %s %s from %s", r.Method, r.URL.Path, r.RemoteAddr)
+			log.Printf("-> %s %s from %s", r.Method, sanitizedPath, r.RemoteAddr)
 		}
 
 		// Wrap response writer to capture status code
@@ -163,7 +165,7 @@ func instrumentHandler(endpoint string, handler http.HandlerFunc) http.HandlerFu
 
 		duration := time.Since(start)
 		if debug {
-			log.Printf("<- %s %s took %v", r.Method, r.URL.Path, duration)
+			log.Printf("<- %s %s took %v", r.Method, sanitizedPath, duration)
 		}
 
 		// Record metrics
@@ -203,6 +205,22 @@ func truncateString(s string, maxLen int) string {
 		return s
 	}
 	return s[:maxLen] + "..."
+}
+
+// sanitizeForLog removes newlines and control characters from a string to prevent log injection
+func sanitizeForLog(s string) string {
+	// Replace newlines and carriage returns with escaped versions in one pass
+	replacer := strings.NewReplacer("\n", "\\n", "\r", "\\r")
+	s = replacer.Replace(s)
+	// Remove other control characters (except tab)
+	var result strings.Builder
+	result.Grow(len(s))
+	for _, r := range s {
+		if r == '\t' || !unicode.IsControl(r) {
+			result.WriteRune(r)
+		}
+	}
+	return result.String()
 }
 
 // handleHealth handles GET /health

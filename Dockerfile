@@ -1,5 +1,5 @@
 # Build stage
-FROM ghcr.io/blinklabs-io/go:1.25.5-1 AS build
+FROM ghcr.io/blinklabs-io/go:1.25.6-1 AS build
 
 ARG VERSION
 ARG COMMIT_HASH

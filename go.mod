@@ -3,7 +3,7 @@ module github.com/blinklabs-io/docker-wireguard
 go 1.25.5
 
 require (
-	github.com/golang-jwt/jwt/v5 v5.3.0
+	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/prometheus/client_golang v1.23.2
 )
 

@@ -47,7 +47,7 @@ var (
 
 // Request/Response types
 type PeerRequest struct {
-	JWT    string `json:"jwt"`
+	Token  string `json:"jwt"` //nolint:gosec // G117: JWT token field is intentionally named for API compatibility
 	Pubkey string `json:"pubkey"`
 }
 
@@ -156,7 +156,7 @@ func instrumentHandler(endpoint string, handler http.HandlerFunc) http.HandlerFu
 		start := time.Now()
 		sanitizedPath := sanitizeForLog(r.URL.Path)
 		if debug {
-			log.Printf("-> %s %s from %s", r.Method, sanitizedPath, r.RemoteAddr)
+			log.Printf("-> %s %s from %s", sanitizeForLog(r.Method), sanitizedPath, sanitizeForLog(r.RemoteAddr)) //nolint:gosec // G706: values are sanitized via sanitizeForLog
 		}
 
 		// Wrap response writer to capture status code
@@ -165,7 +165,7 @@ func instrumentHandler(endpoint string, handler http.HandlerFunc) http.HandlerFu
 
 		duration := time.Since(start)
 		if debug {
-			log.Printf("<- %s %s took %v", r.Method, sanitizedPath, duration)
+			log.Printf("<- %s %s took %v", sanitizeForLog(r.Method), sanitizedPath, duration) //nolint:gosec // G706: values are sanitized via sanitizeForLog
 		}
 
 		// Record metrics
@@ -266,7 +266,7 @@ func validatePeerRequest(w http.ResponseWriter, r *http.Request) (*jwt.Claims, b
 		return nil, false
 	}
 
-	if req.JWT == "" {
+	if req.Token == "" {
 		writeError(w, http.StatusBadRequest, "jwt is required")
 		return nil, false
 	}
@@ -275,7 +275,7 @@ func validatePeerRequest(w http.ResponseWriter, r *http.Request) (*jwt.Claims, b
 		return nil, false
 	}
 
-	claims, err := jwt.ValidateToken(req.JWT, jwtPublicKey)
+	claims, err := jwt.ValidateToken(req.Token, jwtPublicKey)
 	if err != nil {
 		log.Printf("JWT validation failed: %v", err)
 		metrics.JWTValidationErrors.Inc()
@@ -312,10 +312,11 @@ func handleAddPeer(w http.ResponseWriter, r *http.Request) {
 
 	metrics.PeersAdded.Inc()
 	metrics.ActivePeers.Inc()
+	//nolint:gosec // G706: values are sanitized via sanitizeForLog and truncateString
 	log.Printf(
 		"Added peer: pubkey=%s allowed_ip=%s",
-		truncateString(claims.Pubkey, 16),
-		claims.AllowedIP,
+		sanitizeForLog(truncateString(claims.Pubkey, 16)),
+		sanitizeForLog(claims.AllowedIP),
 	)
 
 	writeJSON(w, http.StatusOK, AddPeerResponse{
@@ -344,7 +345,7 @@ func handleDeletePeer(w http.ResponseWriter, r *http.Request) {
 
 	metrics.PeersRemoved.Inc()
 	metrics.ActivePeers.Dec()
-	log.Printf("Removed peer: pubkey=%s", truncateString(claims.Pubkey, 16))
+	log.Printf("Removed peer: pubkey=%s", sanitizeForLog(truncateString(claims.Pubkey, 16))) //nolint:gosec // G706: value is sanitized via sanitizeForLog
 
 	writeJSON(w, http.StatusOK, DeletePeerResponse{Success: true})
 }

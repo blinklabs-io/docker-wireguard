@@ -15,7 +15,7 @@ VERSION ?= $(shell git describe --tags --exact-match 2>/dev/null)
 COMMIT_HASH ?= $(shell git rev-parse --short HEAD)
 GO_LDFLAGS=-ldflags "-s -w -X '$(GOMODULE)/internal/version.Version=$(VERSION)' -X '$(GOMODULE)/internal/version.CommitHash=$(COMMIT_HASH)'"
 
-.PHONY: all build mod-tidy clean format golines test
+.PHONY: all build mod-tidy clean format golines test nilaway
 
 # Default target
 all: format test build
@@ -47,6 +47,9 @@ golines:
 
 test: mod-tidy
 	go test -v -race ./...
+
+nilaway: mod-tidy
+	go run go.uber.org/nilaway/cmd/nilaway@latest ./...
 
 # Build our program binaries
 # Depends on GO_FILES to determine when rebuild is needed

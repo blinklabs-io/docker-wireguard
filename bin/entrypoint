@@ -18,7 +18,9 @@ if [[ ! -c /dev/net/tun ]]; then
 fi
 
 # Enable IP forwarding
-echo 1 > /proc/sys/net/ipv4/ip_forward
+# A failure here is not considered fatal, since this value may be set elsewhere and
+# it's not writable in all environments
+echo 1 > /proc/sys/net/ipv4/ip_forward || true
 
 # Generate server keypair if not provided
 if [[ -z "${WG_PRIVATE_KEY:-}" ]]; then

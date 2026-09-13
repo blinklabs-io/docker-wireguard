@@ -31,4 +31,4 @@ jobs:
         COMMIT_HASH=${{ github.sha }}
       description: WireGuard VPN container with JWT-authenticated peer API
       docker-image: blinklabs/wireguard
-      go-version: 1.25.x
+      go-version: 1.26.x
